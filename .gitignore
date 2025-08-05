@@ -1,0 +1,59 @@
+# Environment files
+.env
+.env.local
+.env.production
+*.log
+
+# Node.js dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# React build outputs
+frontend/build/
+frontend/.eslintcache
+
+# C++ build outputs
+backend/build/
+backend/*.o
+backend/*.so
+backend/*.a
+backend/CMakeCache.txt
+backend/CMakeFiles/
+backend/cmake_install.cmake
+backend/Makefile
+
+# Docker volumes and data
+postgres_data/
+redis_data/
+chat_uploads/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+
+# Database files
+*.db
+*.sqlite
+
+# Backup files
+*.backup
+*.bak

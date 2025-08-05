@@ -1,0 +1,65 @@
+version: '3.8'
+
+networks:
+  chat-network:
+    driver: bridge
+
+volumes:
+  chat_uploads:
+
+services:
+  chat-backend:
+    build:
+      context: ./backend
+      dockerfile: docker/Dockerfile
+    container_name: caffis-chat-backend
+    ports:
+      - "5004:5004"
+    environment:
+      - DATABASE_URL=postgresql://caffis_user:admin5026@caffis-db:5432/caffis_db
+      - REDIS_HOST=caffis-redis
+      - CHAT_PORT=5004
+      - JWT_SECRET=caffis_jwt_secret_2024_super_secure_key_xY9mN3pQ7rT2wK5vL8bC
+    volumes:
+      - chat_uploads:/app/uploads
+      # - ./backend:/app  # ← REMOVED: This was overriding the built executable
+    networks:
+      - chat-network
+    depends_on:
+      - caffis-redis
+    restart: unless-stopped
+
+  chat-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: caffis-chat-frontend
+    ports:
+      - "3003:3000"
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - REACT_APP_CHAT_SERVER_URL=ws://localhost:5004
+      - REACT_APP_API_URL=http://localhost:5000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - chat-network
+    depends_on:
+      - chat-backend
+    restart: unless-stopped
+
+  caffis-redis:
+    image: redis:7-alpine
+    container_name: caffis-chat-redis
+    ports:
+      - "6380:6379"  # Different port to avoid conflicts
+    volumes:
+      - redis_data:/data
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  chat_uploads:
