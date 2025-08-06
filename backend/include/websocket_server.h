@@ -5,8 +5,12 @@
 #include <memory>
 #include <thread>
 #include <vector>
+#include <string>
 
 namespace caffis {
+
+// Forward declarations
+class DatabaseManager;
 
 class WebSocketServer {
 private:
@@ -18,12 +22,21 @@ public:
     explicit WebSocketServer(int port);
     ~WebSocketServer();
     
+    // Core server operations
     void start();
     void stop();
     
+    // Server statistics
+    size_t get_active_connections() const;
+    std::string get_server_stats() const;
+    
 private:
-    void accept_connections();
-    void handle_session(boost::beast::tcp_stream stream);
+    // Session handling
+    void handle_session(boost::beast::tcp_stream stream, const std::string& client_endpoint);
+    
+    // Performance monitoring
+    void cleanup_inactive_sessions();
+    void start_maintenance_tasks();
 };
 
 } // namespace caffis

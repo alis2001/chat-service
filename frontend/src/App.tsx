@@ -1,43 +1,93 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { ChatAuth, TokenManager, User } from './utils/auth';
+import LoadingScreen from './components/LoadingScreen';
+import ErrorScreen from './components/ErrorScreen';
+import ChatInterface from './components/ChatInterface';
+import './styles/App.css';
 
-function App() {
+interface AuthState {
+  loading: boolean;
+  authenticated: boolean;
+  user: User | null;
+  error: string | null;
+}
+
+const App: React.FC = () => {
+  const [authState, setAuthState] = useState<AuthState>({
+    loading: true,
+    authenticated: false,
+    user: null,
+    error: null
+  });
+
+  const initializeAuth = async (): Promise<void> => {
+    setAuthState(prev => ({ 
+      ...prev, 
+      loading: true, 
+      error: null 
+    }));
+    
+    try {
+      const result = await ChatAuth.initialize();
+      
+      if (result.success && result.user) {
+        setAuthState({
+          loading: false,
+          authenticated: true,
+          user: result.user,
+          error: null
+        });
+      } else {
+        setAuthState({
+          loading: false,
+          authenticated: false,
+          user: null,
+          error: result.error || 'Authentication failed'
+        });
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
+      
+      setAuthState({
+        loading: false,
+        authenticated: false,
+        user: null,
+        error: errorMessage
+      });
+    }
+  };
+
+  const handleLogout = (): void => {
+    TokenManager.clearToken();
+    window.close();
+  };
+
+  useEffect(() => {
+    initializeAuth();
+  }, []);
+
+  // Render based on auth state
+  if (authState.loading) {
+    return <LoadingScreen />;
+  }
+
+  if (!authState.authenticated || !authState.user || authState.error) {
+    return (
+      <ErrorScreen 
+        error={authState.error || 'Authentication required'} 
+        onRetry={initializeAuth}
+      />
+    );
+  }
+
   return (
-    <div style={{ 
-      minHeight: '100vh', 
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: 'white',
-      fontFamily: 'Arial, sans-serif'
-    }}>
-      <div style={{ textAlign: 'center' }}>
-        <h1>☕ Caffis Chat Service</h1>
-        <p>🚀 WebSocket Server Running on Port 5004</p>
-        <p>✅ Connected to Redis Cache</p>
-        <p>🎉 Phase 1 Complete - Foundation Ready!</p>
-        <button 
-          onClick={() => {
-            const ws = new WebSocket('ws://localhost:5004');
-            ws.onopen = () => console.log('WebSocket Connected!');
-            ws.onmessage = (msg) => console.log('Received:', msg.data);
-            ws.send('Hello from React!');
-          }}
-          style={{
-            padding: '10px 20px',
-            backgroundColor: 'rgba(255,255,255,0.2)',
-            border: '1px solid rgba(255,255,255,0.3)',
-            borderRadius: '8px',
-            color: 'white',
-            cursor: 'pointer',
-            marginTop: '20px'
-          }}
-        >
-          Test WebSocket Connection
-        </button>
-      </div>
+    <div className="chat-app">
+      <ChatInterface 
+        user={authState.user} 
+        onLogout={handleLogout} 
+      />
     </div>
   );
-}
+};
 
 export default App;
