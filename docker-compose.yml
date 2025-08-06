@@ -6,40 +6,121 @@ networks:
 
 volumes:
   chat_uploads:
+  chat_pgdata:      # NEW: Dedicated PostgreSQL data for chat
+  chat_files:       # NEW: MinIO file storage for chat
+  redis_data:
 
 services:
+  # ================================================
+  # DEDICATED CHAT DATABASE (NEW)
+  # ================================================
+  chat-db:
+    image: postgres:15-alpine
+    container_name: caffis-chat-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: chat_user
+      POSTGRES_PASSWORD: admin5026
+      POSTGRES_DB: chat_service
+    ports:
+      - "5434:5432"  # Different port to avoid conflicts
+    volumes:
+      - chat_pgdata:/var/lib/postgresql/data
+    networks:
+      - chat-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chat_user -d chat_service"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ================================================
+  # FILE STORAGE FOR CHAT (NEW)
+  # ================================================
+  chat-file-storage:
+    image: minio/minio:latest
+    container_name: caffis-chat-files
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # API port
+      - "9001:9001"   # Console port
+    environment:
+      MINIO_ROOT_USER: chatadmin
+      MINIO_ROOT_PASSWORD: admin5026
+    volumes:
+      - chat_files:/data
+    networks:
+      - chat-network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # ================================================
+  # CHAT BACKEND (UPDATED)
+  # ================================================
   chat-backend:
     build:
       context: ./backend
       dockerfile: docker/Dockerfile
     container_name: caffis-chat-backend
+    restart: unless-stopped
     ports:
       - "5004:5004"
     environment:
-      - DATABASE_URL=postgresql://caffis_user:admin5026@caffis-db:5432/caffis_db
+      # NEW: Dedicated chat database
+      - DATABASE_URL=postgresql://chat_user:admin5026@chat-db:5432/chat_service
       - REDIS_HOST=caffis-redis
       - CHAT_PORT=5004
       - JWT_SECRET=caffis_jwt_secret_2024_super_secure_key_xY9mN3pQ7rT2wK5vL8bC
+      
+      # Integration URLs (for later when connecting with main services)
+      - MAIN_API_URL=http://host.docker.internal:5000
+      - MAP_API_URL=http://host.docker.internal:5001
+      
+      # File storage configuration
+      - MINIO_ENDPOINT=chat-file-storage:9000
+      - MINIO_ACCESS_KEY=chatadmin
+      - MINIO_SECRET_KEY=admin5026
+      - MAX_FILE_SIZE=25MB
+      - ALLOWED_FILE_TYPES=jpg,jpeg,png,gif,pdf,doc,docx,txt
     volumes:
       - chat_uploads:/app/uploads
-      # - ./backend:/app  # ← REMOVED: This was overriding the built executable
+      # Keep source mounting for development
+      - ./backend/src:/app/src
     networks:
       - chat-network
     depends_on:
-      - caffis-redis
-    restart: unless-stopped
+      chat-db:
+        condition: service_healthy
+      caffis-redis:
+        condition: service_started
+      chat-file-storage:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
+  # ================================================
+  # CHAT FRONTEND (UPDATED)
+  # ================================================
   chat-frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: caffis-chat-frontend
+    restart: unless-stopped
     ports:
       - "3003:3000"
     environment:
       - CHOKIDAR_USEPOLLING=true
       - REACT_APP_CHAT_SERVER_URL=ws://localhost:5004
       - REACT_APP_API_URL=http://localhost:5000
+      - REACT_APP_FILE_UPLOAD_URL=http://localhost:9000
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -47,19 +128,28 @@ services:
       - chat-network
     depends_on:
       - chat-backend
-    restart: unless-stopped
 
+  # ================================================
+  # REDIS FOR CHAT (EXISTING)
+  # ================================================
   caffis-redis:
     image: redis:7-alpine
     container_name: caffis-chat-redis
+    restart: unless-stopped
     ports:
       - "6380:6379"  # Different port to avoid conflicts
     volumes:
       - redis_data:/data
     networks:
       - chat-network
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
 volumes:
   redis_data:
   chat_uploads:
+  chat_pgdata:    # NEW: Chat database data
+  chat_files:     # NEW: Chat file storage
