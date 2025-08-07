@@ -1,0 +1,265 @@
+/* ============================================ */
+/*        BEAUTIFUL CHAT LOADING SCREEN       */
+/* ============================================ */
+
+.loading-screen,
+.chat-loading-screen {
+  min-height: 100vh;
+  background: var(--gradient-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  position: relative;
+  overflow: hidden;
+  
+  /* Smooth entrance animation */
+  opacity: 0;
+  animation: chatLoadingFadeIn 0.4s ease-out forwards;
+}
+
+.loading-container,
+.chat-loading-container {
+  text-align: center;
+  position: relative;
+  z-index: 10;
+  max-width: 400px;
+  width: 100%;
+  padding: 40px 20px;
+}
+
+/* ============================================ */
+/*           ANIMATED LOADING ICON            */
+/* ============================================ */
+
+.loading-icon {
+  display: inline-block;
+  margin-bottom: 20px;
+  animation: spin 2s linear infinite;
+}
+
+.chat-loading-icon-container {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 32px;
+}
+
+.chat-loading-icon {
+  display: inline-block;
+  color: white;
+  animation: chatIconFloat 3s ease-in-out infinite;
+  position: relative;
+  z-index: 3;
+}
+
+.chat-loading-coffee {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  color: var(--gradient-accent);
+  animation: coffeeRotate 2s ease-in-out infinite;
+  z-index: 4;
+}
+
+.chat-loading-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80px;
+  height: 80px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  animation: chatPulse 2s ease-in-out infinite;
+}
+
+/* ============================================ */
+/*            LOADING TEXT & PROGRESS         */
+/* ============================================ */
+
+.loading-title,
+.chat-loading-title {
+  margin-bottom: 24px;
+  font-weight: 600;
+  font-size: 24px;
+  opacity: 0.95;
+  color: white;
+  animation: textGlow 2s ease-in-out infinite;
+}
+
+.chat-loading-progress {
+  margin-bottom: 24px;
+  width: 100%;
+}
+
+.progress-track {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.8) 0%, 
+    white 50%, 
+    rgba(255, 255, 255, 0.8) 100%);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(255, 255, 255, 0.6), 
+    transparent);
+  animation: progressShimmer 1.5s linear infinite;
+}
+
+/* ============================================ */
+/*             ANIMATED DOTS                  */
+/* ============================================ */
+
+.loading-dots,
+.chat-loading-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.loading-dot,
+.chat-loading-dot {
+  width: 8px;
+  height: 8px;
+  background-color: rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.chat-loading-dots .chat-loading-dot {
+  width: 10px;
+  height: 10px;
+  margin-bottom: 32px;
+}
+
+.loading-dot:nth-child(1),
+.chat-loading-dot:nth-child(1) { 
+  animation: pulse 1.5s ease-in-out 0s infinite; 
+}
+
+.loading-dot:nth-child(2),
+.chat-loading-dot:nth-child(2) { 
+  animation: pulse 1.5s ease-in-out 0.2s infinite; 
+}
+
+.loading-dot:nth-child(3),
+.chat-loading-dot:nth-child(3) { 
+  animation: pulse 1.5s ease-in-out 0.4s infinite; 
+}
+
+.chat-loading-dot.active {
+  background-color: white;
+  transform: scale(1.4);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.6);
+}
+
+/* ============================================ */
+/*            FLOATING BUBBLES               */
+/* ============================================ */
+
+.chat-loading-bubbles {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.bubble {
+  position: absolute;
+  bottom: -50px;
+  width: 20px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  animation: bubbleFloat 8s linear infinite;
+}
+
+.bubble:nth-child(2n) {
+  width: 15px;
+  height: 15px;
+  background: rgba(255, 255, 255, 0.15);
+  animation-duration: 10s;
+}
+
+.bubble:nth-child(3n) {
+  width: 25px;
+  height: 25px;
+  background: rgba(255, 255, 255, 0.08);
+  animation-duration: 6s;
+}
+
+/* ============================================ */
+/*            CONNECTION WARNING              */
+/* ============================================ */
+
+.connection-warning {
+  padding: 8px 16px;
+  background: rgba(255, 193, 7, 0.1);
+  border-top: 1px solid rgba(255, 193, 7, 0.3);
+  font-size: 13px;
+  color: #856404;
+  text-align: center;
+}
+
+/* ============================================ */
+/*            RESPONSIVE DESIGN              */
+/* ============================================ */
+
+@media (max-width: 768px) {
+  .loading-container,
+  .chat-loading-container {
+    padding: 32px 16px;
+  }
+  
+  .loading-title,
+  .chat-loading-title {
+    font-size: 20px;
+  }
+  
+  .loading-icon,
+  .chat-loading-icon {
+    transform: scale(0.8);
+  }
+}
+
+@media (max-width: 480px) {
+  .loading-title,
+  .chat-loading-title {
+    font-size: 18px;
+  }
+  
+  .loading-dots,
+  .chat-loading-dots {
+    gap: 6px;
+  }
+  
+  .loading-dot,
+  .chat-loading-dot {
+    width: 8px;
+    height: 8px;
+  }
+}

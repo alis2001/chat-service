@@ -1,0 +1,71 @@
+/* ============================================ */
+/*       GLOBAL RESETS & BASE STYLES          */
+/* ============================================ */
+
+/* Universal box-sizing and reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Prevent page scrolling - fixed viewport */
+html {
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-apple);
+}
+
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: var(--font-apple);
+}
+
+/* Ensure root fills viewport exactly */
+#root {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+/* Base app styles */
+.chat-app {
+  font-family: var(--font-apple);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+}
+
+.chat-app *,
+.chat-app *::before,
+.chat-app *::after {
+  box-sizing: border-box;
+}
+
+/* ============================================ */
+/*           RESPONSIVE DESIGN BASE           */
+/* ============================================ */
+
+@media (max-width: 768px) {
+  .chat-app {
+    position: relative;
+  }
+}
+
+@media (max-width: 480px) {
+  html, body {
+    font-size: 14px;
+  }
+}

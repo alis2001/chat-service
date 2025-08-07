@@ -1,0 +1,251 @@
+/* ============================================ */
+/*        LIQUID BACKGROUND EFFECTS            */
+/* ============================================ */
+
+/* Add floating orbs to your professional-chat-layout */
+.professional-chat-layout::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(255, 107, 107, 0.08) 0%, transparent 70%);
+  animation: floatingOrb 25s ease-in-out infinite reverse;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.professional-chat-layout::after {
+  content: '';
+  position: absolute;
+  bottom: -20%;
+  right: -20%;
+  width: 50%;
+  height: 50%;
+  background: radial-gradient(circle, rgba(78, 205, 196, 0.06) 0%, transparent 70%);
+  animation: floatingOrb 25s ease-in-out infinite reverse;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* ============================================ */
+/*     ENHANCED MESSAGE POPPING ANIMATIONS     */
+/* ============================================ */
+
+/* Enhanced message content with liquid glass effects */
+.message-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: var(--glass-shimmer);
+  transition: left 0.8s var(--liquid-smooth);
+  pointer-events: none;
+}
+
+.message:hover .message-content::before {
+  left: 100%;
+}
+
+.message:hover .message-content {
+  transform: translateY(-8px) scale(1.03);
+  box-shadow: var(--glass-glow), var(--shadow-large);
+  transition: all 0.4s var(--liquid-elastic);
+}
+
+/* Beautiful sent message animation */
+.message.sent .message-content {
+  background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
+  box-shadow: var(--glass-glow);
+  position: relative;
+  overflow: hidden;
+}
+
+.message.sent .message-content::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.6s var(--liquid-elastic);
+}
+
+.message.sent:hover .message-content::after {
+  width: 200px;
+  height: 200px;
+}
+
+/* ============================================ */
+/*      ENHANCED SEND BUTTON LIQUID MAGIC     */
+/* ============================================ */
+
+/* Enhance your existing send button */
+.send-button {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #FF6B6B, #4ECDC4);
+  box-shadow: var(--glass-glow);
+  transition: all 0.3s var(--liquid-bounce);
+}
+
+.send-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  transition: all 0.4s var(--liquid-pop);
+  transform: translate(-50%, -50%);
+}
+
+.send-button:active::before {
+  width: 120px;
+  height: 120px;
+}
+
+.send-button:hover {
+  transform: scale(1.15) rotate(15deg);
+  box-shadow: var(--glass-glow), 0 20px 40px rgba(255, 107, 107, 0.3);
+}
+
+.send-button:active {
+  transform: scale(0.9);
+  transition: all 0.1s var(--liquid-pop);
+}
+
+/* ============================================ */
+/*       LIQUID INPUT ENHANCEMENT              */
+/* ============================================ */
+
+/* Enhance your message input wrapper */
+.message-input-wrapper {
+  position: relative;
+  overflow: hidden;
+  border: 2px solid transparent;
+  background: linear-gradient(white, white) padding-box,
+              linear-gradient(135deg, rgba(255,107,107,0.3), rgba(78,205,196,0.3)) border-box;
+  transition: all 0.3s var(--liquid-smooth);
+}
+
+.message-input-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: var(--glass-shimmer);
+  transition: left 1s var(--liquid-smooth);
+  pointer-events: none;
+}
+
+.message-input-wrapper:focus-within {
+  transform: scale(1.02);
+  box-shadow: var(--glass-glow);
+}
+
+.message-input-wrapper:focus-within::after {
+  left: 100%;
+}
+
+/* ============================================ */
+/*      ENHANCED SIDEBAR LIQUID EFFECTS       */
+/* ============================================ */
+
+/* Add shimmer effect to sidebar header */
+.sidebar-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 2px;
+  background: var(--glass-shimmer);
+  animation: shimmerFlow 4s ease-in-out infinite;
+}
+
+/* Enhanced user avatar with liquid effects */
+.user-avatar {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s var(--liquid-bounce);
+}
+
+.user-avatar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: var(--glass-shimmer);
+  transition: left 0.6s var(--liquid-smooth);
+}
+
+.user-avatar:hover::before {
+  left: 100%;
+}
+
+.user-avatar:hover {
+  transform: scale(1.2) rotate(10deg);
+  box-shadow: var(--glass-glow);
+}
+
+/* Enhanced room items with liquid hover */
+.chat-room-item {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s var(--liquid-smooth);
+  border-radius: 16px;
+  margin: 4px 8px;
+}
+
+.chat-room-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: var(--glass-shimmer);
+  transition: left 0.6s var(--liquid-smooth);
+  pointer-events: none;
+}
+
+.chat-room-item:hover::before {
+  left: 100%;
+}
+
+.chat-room-item:hover {
+  transform: translateX(12px) scale(1.03);
+  background: var(--glass-background-strong);
+  box-shadow: var(--glass-glow);
+}
+
+.chat-room-item.selected {
+  background: var(--glass-background-strong);
+  box-shadow: var(--glass-glow);
+  transform: translateX(16px);
+}
+
+/* Enhanced room icons */
+.room-icon {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s var(--liquid-bounce);
+}
+
+.room-icon:hover {
+  transform: scale(1.15) rotate(8deg);
+  box-shadow: var(--glass-glow);
+}

@@ -553,8 +553,6 @@ void handle_message(std::shared_ptr<ClientSession> session, const std::string& r
                 }
             }
             
-            std::cout << "💬 Message from " << session->username << ": " << content.substr(0, 50) << std::endl;
-            
         } else if (type == "join_room") {
             if (!session->is_authenticated) {
                 session->ws->text(true);
@@ -603,12 +601,6 @@ void handle_message(std::shared_ptr<ClientSession> session, const std::string& r
 
                     std::cout << "✅ User " << session->username << " joined room: " << room_id << std::endl;
 
-                    // Set user's current room
-                    session->room_id = room_id;
-
-                    // Add user as participant if not already
-                    db_manager->add_participant(room_id, session->user_id, "member");
-
                     // Load and send message history (FIXED - separate transaction)
                     try {
                         std::vector<Message> messages = db_manager->get_room_messages(room_id, 20);
@@ -651,6 +643,15 @@ void handle_message(std::shared_ptr<ClientSession> session, const std::string& r
                     } catch (const std::exception& e) {
                         std::cerr << "❌ Message history error: " << e.what() << std::endl;
                     }
+                    
+                } catch (const std::exception& e) {
+                    std::cerr << "❌ Join room error: " << e.what() << std::endl;
+                    session->ws->text(true);
+                    session->ws->write(net::buffer(R"({"type":"error","error":"Failed to join room"})"));
+                }
+            } else {
+                session->ws->text(true);
+                session->ws->write(net::buffer(R"({"type":"error","error":"Database not available"})"));
             }
             
         } else {

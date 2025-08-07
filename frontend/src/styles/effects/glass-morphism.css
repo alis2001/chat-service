@@ -1,0 +1,251 @@
+/* ============================================ */
+/*     ENHANCED GLASS MORPHISM EFFECTS        */
+/* ============================================ */
+
+/* Add these to enhance your existing glass elements */
+.chat-sidebar,
+.message-input-container,
+.chat-area-header {
+  position: relative;
+}
+
+.chat-sidebar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1px;
+  height: 100%;
+  background: linear-gradient(180deg, 
+    transparent 0%, 
+    rgba(255,255,255,0.3) 20%, 
+    rgba(255,255,255,0.1) 50%, 
+    rgba(255,255,255,0.3) 80%, 
+    transparent 100%);
+  animation: verticalShimmer 3s ease-in-out infinite;
+}
+
+/* Enhanced scrollbar with liquid effects */
+.messages-container::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #FF6B6B, #4ECDC4);
+  border-radius: 10px;
+  transition: all 0.3s var(--liquid-smooth);
+}
+
+.messages-container::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #4ECDC4, #FFE66D);
+  transform: scaleX(1.5);
+  box-shadow: var(--glass-glow);
+}
+
+/* Enhanced chat rooms list scrollbar */
+.chat-rooms-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 107, 107, 0.3);
+  border-radius: 2px;
+  transition: all 0.3s var(--liquid-smooth);
+}
+
+.chat-rooms-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 107, 107, 0.5);
+  transform: scaleX(1.5);
+  box-shadow: var(--glass-glow);
+}
+
+/* ============================================ */
+/*           GLASS ENHANCEMENT EFFECTS         */
+/* ============================================ */
+
+/* Glass shimmer for interactive elements */
+.header-action-button,
+.input-action-button,
+.new-chat-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.header-action-button::before,
+.input-action-button::before,
+.new-chat-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: var(--glass-shimmer);
+  transition: left 0.5s var(--liquid-smooth);
+  pointer-events: none;
+}
+
+.header-action-button:hover::before,
+.input-action-button:hover::before,
+.new-chat-button:hover::before {
+  left: 100%;
+}
+
+/* Enhanced glass backgrounds with depth */
+.welcome-card,
+.error-container,
+.empty-state {
+  background: var(--glass-background);
+  backdrop-filter: var(--glass-backdrop);
+  border: 1px solid var(--glass-border);
+  position: relative;
+  overflow: hidden;
+}
+
+.welcome-card::before,
+.error-container::before,
+.empty-state::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  animation: glassOrb 20s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Glass card hover effects */
+.welcome-card:hover,
+.empty-state:hover {
+  transform: translateY(-5px);
+  box-shadow: var(--glass-glow), var(--shadow-large);
+  transition: all 0.4s var(--liquid-elastic);
+}
+
+/* ============================================ */
+/*         GLASS MORPHISM ANIMATIONS           */
+/* ============================================ */
+
+@keyframes glassOrb {
+  0%, 100% {
+    transform: translateX(0) translateY(0) scale(1);
+    opacity: 0.3;
+  }
+  25% {
+    transform: translateX(10px) translateY(-20px) scale(1.1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translateX(-5px) translateY(10px) scale(0.9);
+    opacity: 0.2;
+  }
+  75% {
+    transform: translateX(15px) translateY(-10px) scale(1.05);
+    opacity: 0.4;
+  }
+}
+
+/* Enhanced glass button effects */
+.start-chat-button,
+.test-connection-button,
+.error-retry-button {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s var(--liquid-elastic);
+}
+
+.start-chat-button::before,
+.test-connection-button::before,
+.error-retry-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: var(--glass-shimmer);
+  transition: left 0.6s var(--liquid-smooth);
+  pointer-events: none;
+}
+
+.start-chat-button:hover::before,
+.test-connection-button:hover::before,
+.error-retry-button:hover::before {
+  left: 100%;
+}
+
+.start-chat-button:hover,
+.test-connection-button:hover,
+.error-retry-button:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: var(--glass-glow), var(--shadow-floating);
+}
+
+/* ============================================ */
+/*         GLASS CONTAINER ENHANCEMENTS        */
+/* ============================================ */
+
+/* Enhanced message container glass effect */
+.messages-container {
+  position: relative;
+}
+
+.messages-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(180deg, 
+    rgba(250, 250, 250, 0.8) 0%, 
+    transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.messages-container::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(0deg, 
+    rgba(250, 250, 250, 0.8) 0%, 
+    transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Enhanced search input glass effect */
+.search-input {
+  background: var(--glass-background);
+  backdrop-filter: var(--glass-backdrop);
+  border: 1px solid var(--glass-border);
+  position: relative;
+}
+
+.search-input:focus {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--glass-glow);
+  transform: scale(1.02);
+}
+
+/* ============================================ */
+/*         GLASS STATUS INDICATORS             */
+/* ============================================ */
+
+.online-indicator {
+  background: #4CAF50;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(5px);
+}
+
+.status-indicator {
+  backdrop-filter: blur(5px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Enhanced unread count glass effect */
+.unread-count {
+  background: var(--gradient-primary);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: var(--glass-glow);
+}
