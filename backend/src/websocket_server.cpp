@@ -6,6 +6,7 @@
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/algorithm/string.hpp>
 #include <iostream>
 #include <thread>
 #include <unordered_map>
@@ -34,7 +35,7 @@ static std::mutex main_db_mutex;
 void init_main_app_connection() {
     try {
         // Default connection string for main app database
-        std::string main_db_url = "postgresql://caffis_user:caffis_user@caffis-db:5432/caffis_db";
+        std::string main_db_url = "postgresql://caffis_user:admin5026@caffis-db:5432/caffis_db";
         
         // Override with environment variable if available
         const char* main_db_env = std::getenv("MAIN_DATABASE_URL");
@@ -119,6 +120,23 @@ std::string base64_decode(const std::string& encoded) {
     return decoded;
 }
 
+// JWT Base64 URL decode function
+std::string base64url_decode(const std::string& input) {
+    std::string base64 = input;
+    
+    // Replace URL-safe characters
+    std::replace(base64.begin(), base64.end(), '-', '+');
+    std::replace(base64.begin(), base64.end(), '_', '/');
+    
+    // Add padding if needed
+    while (base64.length() % 4 != 0) {
+        base64 += '=';
+    }
+    
+    // Use existing base64_decode function
+    return base64_decode(base64);
+}
+
 std::vector<std::pair<std::string, std::string>> get_real_users_from_main_db() {
     std::vector<std::pair<std::string, std::string>> users;
     
@@ -185,12 +203,30 @@ UserDetails get_user_details_from_main_db(const std::string& user_id) {
     
     try {
         if (!main_app_connection) {
+            std::cerr << "❌ Main app database not connected" << std::endl;
             return details;
         }
         
         std::lock_guard<std::mutex> lock(main_db_mutex);
         pqxx::work txn(*main_app_connection);
         
+        // First, let's check if user exists at all
+        pqxx::result exists_result = txn.exec_params(
+            "SELECT COUNT(*) FROM \"User\" WHERE id = $1", 
+            user_id
+        );
+        
+        int user_count = exists_result[0][0].as<int>();
+        std::cout << "🔍 User existence check: " << user_count << " users found with ID " << user_id << std::endl;
+        
+        if (user_count == 0) {
+            std::cout << "❌ No user exists with ID: " << user_id << std::endl;
+            txn.commit();
+            return details;
+        }
+        
+        // User exists, let's get their details
+        // FIXED: Access columns by index to avoid name resolution issues
         pqxx::result result = txn.exec_params(
             "SELECT id, username, \"firstName\", \"lastName\", email, \"profilePic\", bio "
             "FROM \"User\" WHERE id = $1", 
@@ -199,14 +235,21 @@ UserDetails get_user_details_from_main_db(const std::string& user_id) {
         
         if (!result.empty()) {
             auto row = result[0];
-            details.id = row["id"].c_str();
-            details.username = row["username"].is_null() ? "" : row["username"].c_str();
-            details.firstName = row["firstName"].c_str();
-            details.lastName = row["lastName"].c_str();
-            details.email = row["email"].is_null() ? "" : row["email"].c_str();
-            details.profilePic = row["profilePic"].is_null() ? "" : row["profilePic"].c_str();
-            details.bio = row["bio"].is_null() ? "" : row["bio"].c_str();
+            
+            // Access by index to avoid column name issues
+            details.id = row[0].c_str();                    // id (index 0)
+            details.username = row[1].is_null() ? "" : row[1].c_str();  // username (index 1)
+            details.firstName = row[2].is_null() ? "" : row[2].c_str(); // firstName (index 2)
+            details.lastName = row[3].is_null() ? "" : row[3].c_str();  // lastName (index 3)
+            details.email = row[4].is_null() ? "" : row[4].c_str();     // email (index 4)
+            details.profilePic = row[5].is_null() ? "" : row[5].c_str(); // profilePic (index 5)
+            details.bio = row[6].is_null() ? "" : row[6].c_str();       // bio (index 6)
             details.found = true;
+            
+            std::cout << "✅ Found user details: " << details.firstName << " " << details.lastName 
+                      << " (username: " << details.username << ", email: " << details.email << ")" << std::endl;
+        } else {
+            std::cout << "❌ Query returned no results for user ID: " << user_id << std::endl;
         }
         
         txn.commit();
@@ -219,102 +262,87 @@ UserDetails get_user_details_from_main_db(const std::string& user_id) {
 }
 
 // ================================================
-// PRODUCTION JWT VERIFICATION - QUICK FIX
-// Replace the verify_jwt_token function in websocket_server.cpp
+// CORRECTED JWT VERIFICATION FUNCTION
 // ================================================
 bool verify_jwt_token(const std::string& token, std::string& user_id, std::string& username) {
     try {
-        std::cout << "🔐 Production JWT verification starting..." << std::endl;
+        std::cout << "🔐 Real JWT verification starting..." << std::endl;
         
-        // Basic JWT structure validation
-        size_t first_dot = token.find('.');
-        size_t second_dot = token.find('.', first_dot + 1);
+        // Split JWT into parts
+        std::vector<std::string> parts;
+        boost::split(parts, token, boost::is_any_of("."));
         
-        if (first_dot == std::string::npos || second_dot == std::string::npos) {
-            std::cerr << "❌ Invalid JWT format" << std::endl;
+        if (parts.size() != 3) {
+            std::cerr << "❌ Invalid JWT format - expected 3 parts, got " << parts.size() << std::endl;
             return false;
         }
         
-        // Get real users from main database for fallback
-        std::vector<std::pair<std::string, std::string>> real_users;
-        
-        // Try to connect to main app database
+        // Decode payload (second part)
+        std::string payload_json;
         try {
-            std::string main_db_url = "postgresql://caffis_user:caffis_user@caffis-db:5432/caffis_db";
-            const char* main_db_env = std::getenv("MAIN_DATABASE_URL");
-            if (main_db_env) {
-                main_db_url = std::string(main_db_env);
-            }
-            
-            pqxx::connection main_conn(main_db_url);
-            pqxx::work txn(main_conn);
-            
-            pqxx::result result = txn.exec("SELECT id, username FROM \"User\" WHERE username IS NOT NULL LIMIT 10");
-            
-            for (auto row : result) {
-                std::string id = row[0].c_str();
-                std::string uname = row[1].c_str();
-                real_users.push_back({id, uname});
-            }
-            
-            txn.commit();
-            std::cout << "✅ Connected to main app database - found " << real_users.size() << " users" << std::endl;
-            
+            payload_json = base64url_decode(parts[1]);
+            std::cout << "🔍 Decoded JWT payload: " << payload_json << std::endl;
         } catch (const std::exception& e) {
-            std::cerr << "⚠️ Main app database connection failed: " << e.what() << std::endl;
-            // Use fallback known users
-            real_users = {
-                {"dff0837d-001d-4fd0-a858-c029e50c8236", "MadeUp"},
-                {"5ab04109-f328-4762-9c75-f5f75ec28756", "alis2001"},
-                {"72189db6-e402-4d0f-8441-91934004a713", "madeup"}
-            };
-        }
-        
-        if (real_users.empty()) {
-            std::cerr << "❌ No users available" << std::endl;
+            std::cerr << "❌ Failed to decode JWT payload: " << e.what() << std::endl;
             return false;
         }
         
-        // Map token to different real users consistently
-        auto token_hash = std::hash<std::string>{}(token);
+        // Parse JSON payload
+        boost::property_tree::ptree payload_tree;
+        std::istringstream payload_stream(payload_json);
         
-        // Add current timestamp component for variety
-        auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
+        try {
+            boost::property_tree::read_json(payload_stream, payload_tree);
+        } catch (const std::exception& e) {
+            std::cerr << "❌ Failed to parse JWT payload JSON: " << e.what() << std::endl;
+            return false;
+        }
         
-        // Create variety: different browsers/sessions get different users
-        size_t combined_hash = token_hash ^ (now_ms / 30000); // Changes every 30 seconds
+        // Extract user ID from payload
+        std::string jwt_user_id = payload_tree.get<std::string>("id", "");
+        if (jwt_user_id.empty()) {
+            std::cerr << "❌ No user ID found in JWT payload" << std::endl;
+            return false;
+        }
         
-        int user_index = combined_hash % real_users.size();
-        user_id = real_users[user_index].first;
-        username = real_users[user_index].second;
+        std::cout << "✅ Extracted user ID from JWT: " << jwt_user_id << std::endl;
         
-        std::cout << "✅ JWT mapped to REAL user: " << username << " (ID: " << user_id.substr(0, 8) << "...)" << std::endl;
+        // Fetch real user details from main database
+        UserDetails user_details = get_user_details_from_main_db(jwt_user_id);
         
-        // Auto-sync user to chat database
+        if (!user_details.found) {
+            std::cerr << "❌ User not found in main database: " << jwt_user_id << std::endl;
+            return false;
+        }
+        
+        // Set return values with real data
+        user_id = user_details.id;
+        username = !user_details.username.empty() ? user_details.username : user_details.firstName;
+        
+        std::cout << "✅ JWT verified - Real user: " << username << " (ID: " << user_id.substr(0, 8) << "...)" << std::endl;
+        
+        // Auto-sync real user to chat database
         if (db_manager) {
             try {
-                std::cout << "🔄 Auto-syncing user to chat database..." << std::endl;
+                std::cout << "🔄 Auto-syncing REAL user to chat database..." << std::endl;
                 
-                std::string display_name, email;
-                if (username == "MadeUp") {
-                    display_name = "ali sadeghian";
-                    email = "pengupop25@gmail.com";
-                } else if (username == "alis2001") {
-                    display_name = "ali sadeghian";
-                    email = "trefondinext@gmail.com";
-                } else if (username == "madeup") {
-                    display_name = "ali sadeghian";
-                    email = "caffis.dev@gmail.com";
-                } else {
-                    display_name = username;
-                    email = username + "@caffis.com";
+                std::string display_name = user_details.firstName;
+                if (!user_details.lastName.empty()) {
+                    display_name += " " + user_details.lastName;
                 }
                 
-                bool sync_success = db_manager->sync_user(user_id, username, display_name, email, "");
+                std::string email = user_details.email.empty() ? (username + "@caffis.com") : user_details.email;
+                
+                bool sync_success = db_manager->sync_user(
+                    user_id, 
+                    username, 
+                    display_name, 
+                    email, 
+                    user_details.profilePic
+                );
                 
                 if (sync_success) {
-                    std::cout << "✅ User auto-synced: " << username << std::endl;
+                    std::cout << "✅ REAL user auto-synced: " << username << " (" << display_name << ")" << std::endl;
                     db_manager->update_user_status(user_id, true);
                     std::cout << "🟢 User status: online" << std::endl;
                 }
@@ -419,52 +447,6 @@ void handle_message(std::shared_ptr<ClientSession> session, const std::string& r
                 session->ws->write(net::buffer(R"({"type":"auth_error","error":"Invalid token"})"));
             }
             
-        } else if (type == "join_room") {
-            if (!session->is_authenticated) {
-                session->ws->text(true);
-                session->ws->write(net::buffer(R"({"type":"error","error":"Authentication required"})"));
-                return;
-            }
-            
-            std::string room_id = message_json.get<std::string>("room_id", "");
-            if (room_id.empty()) {
-                session->ws->text(true);
-                session->ws->write(net::buffer(R"({"type":"error","error":"Room ID required"})"));
-                return;
-            }
-            
-            session->room_id = room_id;
-            session->last_activity = std::chrono::system_clock::now();
-            
-            // Send confirmation
-            pt::ptree response;
-            response.put("type", "room_joined");
-            response.put("room_id", room_id);
-            response.put("user_id", session->user_id);
-            response.put("username", session->username);
-            response.put("display_name", session->display_name);
-            
-            std::ostringstream response_oss;
-            pt::write_json(response_oss, response);
-            
-            session->ws->text(true);
-            session->ws->write(net::buffer(response_oss.str()));
-            
-            std::cout << "🏠 User " << session->username << " joined room: " << room_id << std::endl;
-            
-            // Notify others in room
-            pt::ptree notification;
-            notification.put("type", "user_joined");
-            notification.put("room_id", room_id);
-            notification.put("user_id", session->user_id);
-            notification.put("username", session->username);
-            notification.put("display_name", session->display_name);
-            
-            std::ostringstream notification_oss;
-            pt::write_json(notification_oss, notification);
-            
-            broadcast_to_room(room_id, notification_oss.str(), session->user_id);
-            
         } else if (type == "message") {
             if (!session->is_authenticated) {
                 session->ws->text(true);
@@ -472,59 +454,47 @@ void handle_message(std::shared_ptr<ClientSession> session, const std::string& r
                 return;
             }
             
-            std::string target_room_id = message_json.get<std::string>("roomId", 
-                                         message_json.get<std::string>("room_id", session->room_id));
-            
-            if (target_room_id.empty()) {
-                session->ws->text(true);
-                session->ws->write(net::buffer(R"({"type":"error","error":"No room specified"})"));
-                return;
-            }
-            
-            if (target_room_id != session->room_id) {
-                session->room_id = target_room_id;
-                std::cout << "🔄 Updated session room to: " << target_room_id << std::endl;
-            }
-            
+            std::string roomId = message_json.get<std::string>("roomId", "");
             std::string content = message_json.get<std::string>("content", "");
-            if (content.empty()) {
+            std::string timestamp = message_json.get<std::string>("timestamp", "");
+            
+            if (roomId.empty() || content.empty()) {
+                session->ws->text(true);
+                session->ws->write(net::buffer(R"({"type":"error","error":"Room ID and content required"})"));
                 return;
             }
             
-            // Create message
-            std::string message_id = "msg_" + std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count());
-            
+            // Generate message ID and timestamp
             auto now = std::chrono::system_clock::now();
-            auto time_t = std::chrono::system_clock::to_time_t(now);
+            auto epoch = now.time_since_epoch();
+            auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(epoch).count();
+            std::string message_id = "msg_" + std::to_string(millis);
             
-            // Create broadcast message
-            pt::ptree broadcast_msg;
-            broadcast_msg.put("type", "new_message");
-            broadcast_msg.put("message_id", message_id);
-            broadcast_msg.put("room_id", session->room_id);
-            broadcast_msg.put("sender_id", session->user_id);
-            broadcast_msg.put("sender_name", session->username);
-            broadcast_msg.put("display_name", session->display_name);
-            broadcast_msg.put("content", content);
-            broadcast_msg.put("timestamp", std::to_string(time_t));
+            // Create message for frontend (new_message format)
+            pt::ptree msg_response;
+            msg_response.put("type", "new_message");
+            msg_response.put("message_id", message_id);
+            msg_response.put("room_id", roomId);  
+            msg_response.put("sender_id", session->user_id);
+            msg_response.put("sender_name", session->display_name.empty() ? session->username : session->display_name);
+            msg_response.put("content", content);
+            msg_response.put("timestamp", std::to_string(millis));
+            msg_response.put("message_type", "text");
             
-            std::ostringstream broadcast_oss;
-            pt::write_json(broadcast_oss, broadcast_msg);
+            std::ostringstream msg_oss;
+            pt::write_json(msg_oss, msg_response);
             
-            // Send confirmation to sender
-            session->ws->text(true);
-            session->ws->write(net::buffer(broadcast_oss.str()));
+            std::cout << "💬 Message from " << session->username << ": " << content << std::endl;
             
-            // Broadcast to other users
-            broadcast_to_room(session->room_id, broadcast_oss.str(), session->user_id);
+            // Broadcast to ALL users in room (including sender for confirmation)
+            broadcast_to_room(roomId, msg_oss.str(), "");
             
             // Save to database
             if (db_manager) {
                 try {
                     Message msg;
                     msg.id = message_id;
-                    msg.room_id = session->room_id;
+                    msg.room_id = roomId;
                     msg.sender_id = session->user_id;
                     msg.content = content;
                     msg.type = MessageType::TEXT;
@@ -536,7 +506,7 @@ void handle_message(std::shared_ptr<ClientSession> session, const std::string& r
                         std::cout << "💾 Message saved: " << saved_id << std::endl;
                     }
                 } catch (const std::exception& e) {
-                    std::cerr << "⚠️ Database save failed: " << e.what() << std::endl;
+                    std::cerr << "❌ Database save failed: " << e.what() << std::endl;
                 }
             }
             
@@ -668,40 +638,26 @@ void WebSocketServer::handle_session(beast::tcp_stream stream, const std::string
             handle_message(session, message);
         }
         
-    } catch (const beast::system_error& se) {
-        if (se.code() != websocket::error::closed) {
-            std::cerr << "❌ WebSocket error: " << se.code().message() << std::endl;
-        } else {
-            std::cout << "👋 Session disconnected: " << session_id << std::endl;
-        }
     } catch (const std::exception& e) {
-        std::cerr << "❌ Session error: " << e.what() << std::endl;
-    }
-    
-    // Cleanup
-    {
-        std::lock_guard<std::mutex> lock(sessions_mutex);
-        auto it = active_sessions.find(session_id);
-        if (it != active_sessions.end()) {
-            std::cout << "🧹 Cleaning up: " << session_id;
-            if (it->second->is_authenticated) {
-                std::cout << " (User: " << it->second->username << ")";
-                if (db_manager) {
-                    db_manager->update_user_status(it->second->user_id, false);
-                }
+        std::cout << "👋 Session disconnected: " << session_id << std::endl;
+        if (active_sessions.count(session_id) && active_sessions[session_id]->is_authenticated) {
+            std::cout << "🧹 Cleaning up: " << session_id << " (User: " << active_sessions[session_id]->username << ")";
+            if (db_manager) {
+                db_manager->update_user_status(active_sessions[session_id]->user_id, false);
             }
-            std::cout << std::endl;
-            
-            active_sessions.erase(it);
+        } else {
+            std::cout << "🧹 Cleaning up: " << session_id;
         }
+        
+        {
+            std::lock_guard<std::mutex> lock(sessions_mutex);
+            active_sessions.erase(session_id);
+        }
+        
+        std::cout << std::endl << "📊 Active sessions: " << active_sessions.size() << std::endl;
     }
-    
-    std::cout << "📊 Active sessions: " << active_sessions.size() << std::endl;
 }
 
-// ================================================
-// UTILITY METHODS
-// ================================================
 size_t WebSocketServer::get_active_connections() const {
     std::lock_guard<std::mutex> lock(sessions_mutex);
     return active_sessions.size();
@@ -710,59 +666,72 @@ size_t WebSocketServer::get_active_connections() const {
 std::string WebSocketServer::get_server_stats() const {
     std::lock_guard<std::mutex> lock(sessions_mutex);
     
-    size_t authenticated_count = 0;
-    size_t in_rooms_count = 0;
-    
+    size_t authenticated_users = 0;
     for (const auto& [session_id, session] : active_sessions) {
         if (session->is_authenticated) {
-            authenticated_count++;
-        }
-        if (!session->room_id.empty()) {
-            in_rooms_count++;
+            authenticated_users++;
         }
     }
     
-    return "📊 Server Stats:\n"
-           "   • Connections: " + std::to_string(active_sessions.size()) + "\n"
-           "   • Authenticated: " + std::to_string(authenticated_count) + "\n"
-           "   • In rooms: " + std::to_string(in_rooms_count);
-}
-
-void WebSocketServer::set_database_manager(std::shared_ptr<DatabaseManager> db_mgr) {
-    std::cout << "🔗 Database manager connection requested" << std::endl;
+    std::ostringstream stats;
+    stats << "📊 Server Stats:\n";
+    stats << "   • Total connections: " << active_sessions.size() << "\n";
+    stats << "   • Authenticated users: " << authenticated_users << "\n";
+    stats << "   • Server port: " << port_;
+    
+    return stats.str();
 }
 
 void WebSocketServer::cleanup_inactive_sessions() {
     std::lock_guard<std::mutex> lock(sessions_mutex);
     
     auto now = std::chrono::system_clock::now();
-    auto iterator = active_sessions.begin();
+    auto it = active_sessions.begin();
     
-    while (iterator != active_sessions.end()) {
-        auto& [session_id, session] = *iterator;
-        auto idle_time = std::chrono::duration_cast<std::chrono::minutes>(now - session->last_activity);
+    while (it != active_sessions.end()) {
+        auto session = it->second;
+        auto inactive_time = std::chrono::duration_cast<std::chrono::minutes>(now - session->last_activity);
         
-        if (idle_time.count() > 30) {
-            std::cout << "🧹 Cleaning inactive session: " << session_id << std::endl;
-            if (session->is_authenticated && db_manager) {
+        if (inactive_time.count() > 30) { // 30 minutes timeout
+            std::cout << "🧹 Cleaning up inactive session: " << it->first << std::endl;
+            
+            if (db_manager && session->is_authenticated) {
                 db_manager->update_user_status(session->user_id, false);
             }
-            iterator = active_sessions.erase(iterator);
+            
+            try {
+                if (session->ws && session->ws->is_open()) {
+                    session->ws->close(websocket::close_code::going_away);
+                }
+            } catch (const std::exception& e) {
+                // Ignore cleanup errors
+            }
+            
+            it = active_sessions.erase(it);
         } else {
-            ++iterator;
+            ++it;
         }
     }
 }
 
 void WebSocketServer::start_maintenance_tasks() {
+    std::cout << "🔧 Maintenance tasks started" << std::endl;
+    
     std::thread([this]() {
         while (true) {
-            std::this_thread::sleep_for(std::chrono::minutes(10));
+            std::this_thread::sleep_for(std::chrono::minutes(5));
             cleanup_inactive_sessions();
+            
+            // FIXED: Use correct method name
+            if (db_manager) {
+                db_manager->cleanup_expired_typing_indicators();
+            }
         }
     }).detach();
-    
-    std::cout << "🔧 Maintenance tasks started" << std::endl;
+}
+
+void WebSocketServer::set_database_manager(std::shared_ptr<DatabaseManager> db) {
+    // This method can be used if needed
 }
 
 } // namespace caffis
