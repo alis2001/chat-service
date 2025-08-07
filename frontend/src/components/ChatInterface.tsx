@@ -20,14 +20,15 @@ interface ChatInterfaceProps {
 }
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
-  const [selectedRoomId, setSelectedRoomId] = useState<string>('1');
+  const [selectedRoomId, setSelectedRoomId] = useState<string>('550e8400-e29b-41d4-a716-446655440000');
+
   const [chatRooms] = useState<ChatRoom[]>([
     {
-      id: '1',
-      name: 'Coffee Meetup - Downtown',
-      type: 'meetup',
-      lastMessage: 'Great coffee spot!',
-      lastMessageTime: '2 min ago',
+      id: '550e8400-e29b-41d4-a716-446655440000',  // UUID format for database
+      name: 'General Chat',
+      type: 'group',
+      lastMessage: 'Start chatting!',
+      lastMessageTime: 'now',
       unreadCount: 0,
       isOnline: true
     }

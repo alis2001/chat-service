@@ -186,6 +186,12 @@ export class WebSocketService {
         this.notifyMessageHandlers(chatMessage);
         break;
 
+      case 'rooms_list':
+        console.log('📋 Available rooms:', message.rooms);
+        // You could emit this to a rooms handler if needed
+        // this.notifyRoomsHandlers(message.rooms);
+        break;
+
       case 'user_joined':
         console.log('👋 User joined:', message.username);
         this.notifyUserJoinHandlers(message.user_id, message.username);

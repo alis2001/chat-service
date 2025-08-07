@@ -121,6 +121,20 @@ void DatabaseManager::prepare_statements() {
             "ON CONFLICT (room_id, user_id) DO UPDATE SET "
             "started_at = NOW(), expires_at = NOW() + INTERVAL '10 seconds'");
         
+        // NEW: Room access check
+        connection_->prepare("can_user_join_room",
+            "SELECT COUNT(*) FROM room_participants "
+            "WHERE room_id = $1 AND user_id = $2 AND is_active = true");
+        
+        // NEW: Get user rooms
+        connection_->prepare("get_user_rooms",
+            "SELECT cr.id, cr.name, cr.type, cr.created_by, cr.invite_id, "
+            "cr.last_activity, cr.created_at, cr.is_active "
+            "FROM chat_rooms cr "
+            "JOIN room_participants rp ON cr.id = rp.room_id "
+            "WHERE rp.user_id = $1 AND rp.is_active = true AND cr.is_active = true "
+            "ORDER BY cr.last_activity DESC");
+        
         std::cout << "✅ Database prepared statements created" << std::endl;
         
     } catch (const std::exception& e) {
@@ -251,6 +265,64 @@ bool DatabaseManager::add_participant(const std::string& room_id, const std::str
     }
 }
 
+// NEW: Check if user can join room
+bool DatabaseManager::can_user_join_room(const std::string& user_id, const std::string& room_id) {
+    try {
+        pqxx::work txn(*connection_);
+        pqxx::result result = txn.exec_prepared("can_user_join_room", room_id, user_id);
+        txn.commit();
+        
+        if (!result.empty()) {
+            int count = result[0][0].as<int>();
+            // If count > 0, user is already a participant
+            // For now, we'll allow anyone to join any room (later add access control)
+            return true; // Always allow for testing, modify later for security
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "❌ Failed to check room access: " << e.what() << std::endl;
+    }
+    
+    return true; // Allow by default for testing
+}
+
+// NEW: Get user's rooms
+std::vector<ChatRoom> DatabaseManager::get_user_rooms(const std::string& user_id) {
+    std::vector<ChatRoom> rooms;
+    
+    try {
+        pqxx::work txn(*connection_);
+        pqxx::result result = txn.exec_prepared("get_user_rooms", user_id);
+        txn.commit();
+        
+        for (const auto& row : result) {
+            ChatRoom room;
+            room.id = row["id"].c_str();
+            room.name = row["name"].c_str();
+            room.type = row["type"].c_str();
+            room.created_by = row["created_by"].c_str();
+            
+            if (!row["invite_id"].is_null()) {
+                room.invite_id = row["invite_id"].c_str();
+            }
+            
+            room.is_active = row["is_active"].as<bool>();
+            
+            rooms.push_back(room);
+        }
+        
+    } catch (const std::exception& e) {
+        std::cerr << "❌ Failed to get user rooms: " << e.what() << std::endl;
+    }
+    
+    return rooms;
+}
+
+// NEW: Alias for get_messages
+std::vector<Message> DatabaseManager::get_room_messages(const std::string& room_id, int limit) {
+    return get_messages(room_id, limit);
+}
+
 std::string DatabaseManager::save_message(const Message& message) {
     try {
         std::string message_id = generate_uuid();
@@ -359,6 +431,80 @@ bool DatabaseManager::cleanup_expired_typing_indicators() {
         
     } catch (const std::exception& e) {
         std::cerr << "❌ Failed to cleanup typing indicators: " << e.what() << std::endl;
+        return false;
+    }
+}
+
+// Add this method to your database_manager.cpp (before the closing brace of namespace caffis)
+bool DatabaseManager::ensure_user_in_default_room(const std::string& user_id, const std::string& username) {
+    try {
+        std::string default_room_id = "550e8400-e29b-41d4-a716-446655440000";
+        
+        pqxx::work txn(*connection_);
+        
+        // Check if default room exists
+        pqxx::result room_check = txn.exec_params(
+            "SELECT id FROM chat_rooms WHERE id = $1", default_room_id);
+        
+        if (room_check.empty()) {
+            // Create default room with explicit UUID
+            txn.exec_params(
+                "INSERT INTO chat_rooms (id, name, type, created_by, description) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                default_room_id, 
+                "General Chat", 
+                "group", 
+                user_id,
+                "Welcome to Caffis! Start chatting with other coffee lovers."
+            );
+            std::cout << "✅ Created default 'General Chat' room with ID: " << default_room_id << std::endl;
+        }
+        
+        // Check if user is already a participant
+        pqxx::result participant_check = txn.exec_params(
+            "SELECT id FROM room_participants WHERE room_id = $1 AND user_id = $2",
+            default_room_id, user_id);
+        
+        if (participant_check.empty()) {
+            // Add user as participant
+            txn.exec_params(
+                "INSERT INTO room_participants (room_id, user_id, role, is_active) "
+                "VALUES ($1, $2, $3, $4)",
+                default_room_id, user_id, "member", true
+            );
+            std::cout << "✅ Added " << username << " to General Chat" << std::endl;
+        }
+        
+        // FIXED: Add all existing users to this room using proper parameter syntax
+        pqxx::result all_users = txn.exec_params(
+            "SELECT id, username FROM chat_users WHERE id != $1", user_id);
+        
+        for (const auto& user_row : all_users) {
+            std::string other_user_id = user_row[0].c_str();
+            std::string other_username = user_row[1].c_str();
+            
+            // Check if they're already a participant
+            pqxx::result other_check = txn.exec_params(
+                "SELECT id FROM room_participants WHERE room_id = $1 AND user_id = $2",
+                default_room_id, other_user_id);
+            
+            if (other_check.empty()) {
+                txn.exec_params(
+                    "INSERT INTO room_participants (room_id, user_id, role, is_active) "
+                    "VALUES ($1, $2, $3, $4)",
+                    default_room_id, other_user_id, "member", true
+                );
+                std::cout << "✅ Also added " << other_username << " to General Chat" << std::endl;
+            }
+        }
+        
+        // COMMIT the transaction
+        txn.commit();
+        std::cout << "💾 Transaction committed successfully" << std::endl;
+        return true;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "❌ Failed to ensure user in default room: " << e.what() << std::endl;
         return false;
     }
 }

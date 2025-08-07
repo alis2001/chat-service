@@ -40,6 +40,11 @@ public:
     bool remove_participant(const std::string& room_id, const std::string& user_id);
     std::vector<std::string> get_room_participants(const std::string& room_id);
     
+    // NEW: Room access and user rooms
+    bool can_user_join_room(const std::string& user_id, const std::string& room_id);
+    std::vector<ChatRoom> get_user_rooms(const std::string& user_id);
+    std::vector<Message> get_room_messages(const std::string& room_id, int limit = 50);
+    
     // Message operations
     std::string save_message(const Message& message);
     std::vector<Message> get_messages(const std::string& room_id, int limit = 50, 
@@ -62,6 +67,9 @@ public:
     // Health and maintenance
     bool cleanup_expired_typing_indicators();
     std::string get_database_stats();
+    
+
+    bool ensure_user_in_default_room(const std::string& user_id, const std::string& username);
 
 private:
     std::string generate_uuid();

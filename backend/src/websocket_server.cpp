@@ -442,6 +442,49 @@ void handle_message(std::shared_ptr<ClientSession> session, const std::string& r
                 
                 std::cout << "🔐 User authenticated: " << username << std::endl;
                 
+                // ================================================
+                // AUTO-CREATE DEFAULT ROOM AND AUTO-JOIN USER
+                // ================================================
+                if (db_manager) {
+                    try {
+                        // Ensure user is in default room (creates room if needed)
+                        bool auto_room_success = db_manager->ensure_user_in_default_room(session->user_id, session->username);
+                        
+                        if (auto_room_success) {
+                            std::cout << "✅ User " << session->username << " auto-added to default room" << std::endl;
+                            
+                            // Send available rooms to user
+                            std::vector<ChatRoom> user_rooms = db_manager->get_user_rooms(session->user_id);
+                            
+                            pt::ptree rooms_response;
+                            rooms_response.put("type", "rooms_list");
+                            
+                            pt::ptree rooms_array;
+                            for (const auto& room : user_rooms) {
+                                pt::ptree room_obj;
+                                room_obj.put("id", room.id);
+                                room_obj.put("name", room.name);
+                                room_obj.put("type", room.type);
+                                room_obj.put("isOnline", true);
+                                rooms_array.push_back(std::make_pair("", room_obj));
+                            }
+                            
+                            rooms_response.add_child("rooms", rooms_array);
+                            
+                            std::ostringstream rooms_oss;
+                            pt::write_json(rooms_oss, rooms_response);
+                            
+                            session->ws->text(true);
+                            session->ws->write(net::buffer(rooms_oss.str()));
+                            
+                            std::cout << "📋 Sent " << user_rooms.size() << " available rooms to " << session->username << std::endl;
+                        }
+                        
+                    } catch (const std::exception& e) {
+                        std::cerr << "❌ Auto-room setup failed: " << e.what() << std::endl;
+                    }
+                }
+                
             } else {
                 session->ws->text(true);
                 session->ws->write(net::buffer(R"({"type":"auth_error","error":"Invalid token"})"));
@@ -511,6 +554,104 @@ void handle_message(std::shared_ptr<ClientSession> session, const std::string& r
             }
             
             std::cout << "💬 Message from " << session->username << ": " << content.substr(0, 50) << std::endl;
+            
+        } else if (type == "join_room") {
+            if (!session->is_authenticated) {
+                session->ws->text(true);
+                session->ws->write(net::buffer(R"({"type":"error","error":"Authentication required"})"));
+                return;
+            }
+            
+            std::string room_id = message_json.get<std::string>("room_id", "");
+            
+            if (room_id.empty()) {
+                session->ws->text(true);
+                session->ws->write(net::buffer(R"({"type":"error","error":"Room ID required"})"));
+                return;
+            }
+            
+            std::cout << "🏠 User " << session->username << " joining room: " << room_id << std::endl;
+            
+            // Check if user can join this room (is participant)
+            if (db_manager) {
+                try {
+                    bool can_join = db_manager->can_user_join_room(session->user_id, room_id);
+                    
+                    if (!can_join) {
+                        session->ws->text(true);
+                        session->ws->write(net::buffer(R"({"type":"error","error":"Access denied to room"})"));
+                        return;
+                    }
+                    
+                    // Set user's current room
+                    session->room_id = room_id;
+                    
+                    // Add user as participant if not already
+                    db_manager->add_participant(room_id, session->user_id, "member");
+                    
+                    // Send success response FIRST
+                    pt::ptree join_response;
+                    join_response.put("type", "room_joined");
+                    join_response.put("room_id", room_id);
+                    join_response.put("message", "Successfully joined room");
+
+                    std::ostringstream join_oss;
+                    pt::write_json(join_oss, join_response);
+
+                    session->ws->text(true);
+                    session->ws->write(net::buffer(join_oss.str()));
+
+                    std::cout << "✅ User " << session->username << " joined room: " << room_id << std::endl;
+
+                    // Set user's current room
+                    session->room_id = room_id;
+
+                    // Add user as participant if not already
+                    db_manager->add_participant(room_id, session->user_id, "member");
+
+                    // Load and send message history (FIXED - separate transaction)
+                    try {
+                        std::vector<Message> messages = db_manager->get_room_messages(room_id, 20);
+                        
+                        // Send messages in chronological order (oldest first)  
+                        std::reverse(messages.begin(), messages.end());
+                        
+                        for (const auto& msg : messages) {
+                            // Get sender details
+                            std::string sender_username, sender_display_name;
+                            db_manager->get_user(msg.sender_id, sender_username, sender_display_name);
+                            
+                            pt::ptree history_msg;
+                            history_msg.put("type", "new_message");
+                            history_msg.put("message_id", msg.id);
+                            history_msg.put("room_id", msg.room_id);
+                            history_msg.put("sender_id", msg.sender_id);
+                            history_msg.put("sender_name", sender_display_name.empty() ? sender_username : sender_display_name);
+                            history_msg.put("content", msg.content);
+                            
+                            // Convert timestamp
+                            auto duration = msg.timestamp.time_since_epoch();
+                            auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
+                            history_msg.put("timestamp", std::to_string(millis));
+                            history_msg.put("message_type", "text");
+                            
+                            std::ostringstream history_oss;
+                            pt::write_json(history_oss, history_msg);
+                            
+                            session->ws->text(true);
+                            session->ws->write(net::buffer(history_oss.str()));
+                            
+                            // Small delay for message ordering
+                            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                        }
+                        
+                        if (messages.size() > 0) {
+                            std::cout << "📜 Sent " << messages.size() << " historical messages to " << session->username << std::endl;
+                        }
+                    } catch (const std::exception& e) {
+                        std::cerr << "❌ Message history error: " << e.what() << std::endl;
+                    }
+            }
             
         } else {
             std::cerr << "❓ Unknown message type: " << type << std::endl;
