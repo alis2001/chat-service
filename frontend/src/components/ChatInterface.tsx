@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from '../utils/auth';
+import { WebSocketService, ChatMessage, ConnectionStatus } from '../utils/WebSocketService';
 import ChatSidebar from './ChatSidebar';
 import ChatArea from './ChatArea';
 
@@ -13,15 +14,6 @@ interface ChatRoom {
   isOnline?: boolean;
 }
 
-interface Message {
-  id: string;
-  senderId: string;
-  content: string;
-  timestamp: string;
-  type: 'text' | 'image' | 'file' | 'system';
-  senderName: string;
-}
-
 interface ChatInterfaceProps {
   user: User;
   onLogout: () => void;
@@ -29,46 +21,134 @@ interface ChatInterfaceProps {
 
 const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
   const [selectedRoomId, setSelectedRoomId] = useState<string>('1');
-  const [chatRooms] = useState<ChatRoom[]>([]);
-  const [messages] = useState<Message[]>([]);
+  const [chatRooms] = useState<ChatRoom[]>([
+    {
+      id: '1',
+      name: 'Coffee Meetup - Downtown',
+      type: 'meetup',
+      lastMessage: 'Great coffee spot!',
+      lastMessageTime: '2 min ago',
+      unreadCount: 0,
+      isOnline: true
+    }
+  ]);
+  
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
+  const [isJoiningRoom, setIsJoiningRoom] = useState(false);
+  
+  const webSocketService = useRef<WebSocketService | null>(null);
 
-  const handleRoomSelect = (roomId: string) => {
-    setSelectedRoomId(roomId);
-    console.log('Selected room:', roomId);
-  };
+  // Initialize WebSocket connection
+  useEffect(() => {
+    console.log('🚀 Initializing WebSocket service...');
+    webSocketService.current = new WebSocketService();
 
-  const handleNewChat = () => {
-    console.log('Starting new chat...');
-    // TODO: Implement new chat functionality
-  };
+    // Set up event handlers
+    webSocketService.current.onMessage((message: ChatMessage) => {
+      console.log('💬 New message received:', message);
+      setMessages(prev => [...prev, message]);
+    });
 
-  const handleSendMessage = (content: string) => {
-    console.log('Sending message:', content);
-    
-    // Test WebSocket connection
+    webSocketService.current.onStatusChange((status: ConnectionStatus) => {
+      console.log('🔌 Connection status changed:', status);
+      setConnectionStatus(status);
+    });
+
+    webSocketService.current.onUserJoin((userId: string, username: string) => {
+      console.log('👋 User joined:', username);
+      // You could show a system message here
+    });
+
+    // Connect to WebSocket
+    webSocketService.current.connect()
+      .then(() => {
+        console.log('✅ WebSocket service initialized successfully');
+        // Auto-join the selected room
+        if (selectedRoomId) {
+          joinRoom(selectedRoomId);
+        }
+      })
+      .catch((error) => {
+        console.error('❌ Failed to initialize WebSocket service:', error);
+      });
+
+    // Cleanup on unmount
+    return () => {
+      if (webSocketService.current) {
+        webSocketService.current.disconnect();
+      }
+    };
+  }, []);
+
+  // Join room function
+  const joinRoom = async (roomId: string) => {
+    if (!webSocketService.current?.isConnected) {
+      console.log('⏳ WebSocket not connected, waiting...');
+      return;
+    }
+
+    setIsJoiningRoom(true);
     try {
-      const ws = new WebSocket(process.env.REACT_APP_CHAT_SERVER_URL || 'ws://localhost:5004');
+      await webSocketService.current.joinRoom(roomId);
+      console.log(`✅ Successfully joined room: ${roomId}`);
       
-      ws.onopen = () => {
-        console.log('✅ WebSocket Connected!');
-        ws.send(JSON.stringify({
-          type: 'message',
-          roomId: selectedRoomId,
-          content: content,
-          user: user.firstName,
-          timestamp: new Date().toISOString()
-        }));
-      };
+      // Clear messages when switching rooms
+      setMessages([]);
       
-      ws.onmessage = (msg) => {
-        console.log('📨 Received:', msg.data);
-      };
+      // TODO: Load message history from backend API
+      // const messageHistory = await fetchMessageHistory(roomId);
+      // setMessages(messageHistory);
       
-      ws.onerror = (error) => {
-        console.error('❌ WebSocket Error:', error);
-      };
     } catch (error) {
-      console.error('❌ Connection error:', error);
+      console.error(`❌ Failed to join room ${roomId}:`, error);
+    } finally {
+      setIsJoiningRoom(false);
+    }
+  };
+
+  // Handle room selection
+  const handleRoomSelect = (roomId: string) => {
+    console.log('🏠 Selecting room:', roomId);
+    setSelectedRoomId(roomId);
+    joinRoom(roomId);
+  };
+
+  // Handle new chat
+  const handleNewChat = () => {
+    console.log('💬 Starting new chat...');
+    // TODO: Implement new chat functionality
+    // This could open a modal to select users or create a new room
+  };
+
+  // Handle sending messages
+  const handleSendMessage = (content: string) => {
+    if (!webSocketService.current?.isConnected) {
+      console.error('❌ Cannot send message: WebSocket not connected');
+      return;
+    }
+
+    try {
+      webSocketService.current.sendMessage(content);
+      console.log('✅ Message sent:', content);
+    } catch (error) {
+      console.error('❌ Failed to send message:', error);
+    }
+  };
+
+  // Get connection status display
+  const getConnectionStatusText = (): string => {
+    switch (connectionStatus) {
+      case 'connecting':
+        return 'Connecting...';
+      case 'connected':
+        return 'Connected';
+      case 'disconnected':
+        return 'Disconnected';
+      case 'error':
+        return 'Connection Error';
+      default:
+        return 'Unknown';
     }
   };
 
@@ -76,6 +156,15 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
 
   return (
     <div className="professional-chat-layout">
+      {/* Connection Status Indicator */}
+      {connectionStatus !== 'connected' && (
+        <div className={`connection-status-bar ${connectionStatus}`}>
+          <span className="status-indicator"></span>
+          {getConnectionStatusText()}
+          {isJoiningRoom && ' • Joining room...'}
+        </div>
+      )}
+
       <ChatSidebar
         user={user}
         chatRooms={chatRooms}
@@ -91,6 +180,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ user, onLogout }) => {
         roomType={selectedRoom?.type || 'meetup'}
         messages={messages}
         onSendMessage={handleSendMessage}
+        isConnected={connectionStatus === 'connected'}
+        isJoiningRoom={isJoiningRoom}
       />
     </div>
   );

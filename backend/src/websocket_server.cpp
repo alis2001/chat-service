@@ -219,10 +219,28 @@ void handle_message(std::shared_ptr<ClientSession> session, const std::string& r
             auto now = std::chrono::system_clock::now();
             auto time_t = std::chrono::system_clock::to_time_t(now);
             
-            // TODO: Store in database
-            // if (db_manager) {
-            //     db_manager->store_message(message_id, session->room_id, session->user_id, content);
-            // }
+            // Replace the commented TODO section with this:
+
+            // ✅ Store message in database  
+            if (db_manager) {
+                Message msg;
+                msg.id = message_id;
+                msg.room_id = session->room_id;
+                msg.sender_id = session->user_id;
+                msg.content = content;
+                msg.type = MessageType::TEXT;
+                msg.is_edited = false;
+                msg.is_deleted = false;
+                
+                std::string saved_id = db_manager->save_message(msg);
+                if (!saved_id.empty()) {
+                    std::cout << "💾 Message saved to database: " << saved_id << std::endl;
+                } else {
+                    std::cerr << "❌ Failed to save message to database" << std::endl;
+                }
+            } else {
+                std::cerr << "❌ Database manager not initialized" << std::endl;
+            }
             
             // Create broadcast message
             pt::ptree broadcast_msg;

@@ -26,6 +26,9 @@ public:
     void start();
     void stop();
     
+    // Database connection
+    void set_database_manager(std::shared_ptr<DatabaseManager> db_manager);
+    
     // Server statistics
     size_t get_active_connections() const;
     std::string get_server_stats() const;
